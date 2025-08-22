@@ -1,0 +1,11 @@
+langchain
+langchain-google-genai
+langchain-core
+langchain-openai
+langchain-pinecone
+python-dotenv
+google-generativeai
+pinecone-client
+fastapi
+pydantic
+uvicorn
