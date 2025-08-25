@@ -10,7 +10,6 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_openai import ChatOpenAI
 from langchain_openai import OpenAIEmbeddings
 import time
-import uuid
 from pinecone import Pinecone
 from langchain_pinecone import PineconeVectorStore
 
@@ -66,6 +65,22 @@ prompt = PromptTemplate(
 
 
 #Runnables
+import time
+def make_vector_store(user_id):
+    global namespace, vector_store
+     # generate new namespace every run
+    namespace = user_id
+    print("user_id: ", user_id, " created")
+
+    # Store embeddings in Pinecone
+    vector_store = PineconeVectorStore(
+        index_name=index_name,
+        embedding=embeddings,
+        namespace=namespace
+    )
+    print("vector store created")
+
+
 def upload_video(file_path):
     try:
         video = client.files.upload(file=file_path)
@@ -86,6 +101,7 @@ def upload_video(file_path):
         return None
 
     return video
+
 
 
 runnable_upload_video = RunnableLambda(upload_video)
@@ -112,23 +128,14 @@ runnable_prompt = RunnableLambda(prompt_creation)
 
 
 def description_storing(description):
-    global vector_store, namespace
+    global vector_store
     try:
-
-         # generate new namespace every run
-        namespace = str(uuid.uuid4())[:8]
 
         chunks = splitter.split_text(description)
         if not chunks:
             raise ValueError("No chunks generated from description")
-
-        # Store embeddings in Pinecone
-        vector_store = PineconeVectorStore.from_texts(
-            texts=chunks,
-            embedding=embeddings,
-            index_name=index_name,
-            namespace=namespace,
-        )
+               
+        vector_store.add_texts(texts=chunks)
 
         print(f"✅ Description Stored in Pinecone (namespace={namespace})")
         return description
@@ -164,20 +171,19 @@ runnable_retrieve_docs = RunnableLambda(retriever_func)
 parser = StrOutputParser()
 
 #Description Generating & Storing Chain
-description_chain = runnable_upload_video | runnable_prompt | description_generating_llm | parser | runnable_description_storing
+description_chain =  upload_video | runnable_prompt | description_generating_llm | parser | runnable_description_storing
 
 
 #Query Answering Chain
 QandA_chain = runnable_retrieve_docs | prompt | query_answering_llm | parser
 
 
-
-
-
-
-# Export these for API usage
 __all__ = [
     "description_chain",
     "QandA_chain"
 ]
+
+
+
+
 

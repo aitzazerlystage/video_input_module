@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from pydantic import BaseModel, Field
-from video_module_app import description_chain, QandA_chain
+from video_module_app import description_chain, QandA_chain, upload_video, make_vector_store
+from typing import List
+import uuid
 
 app = FastAPI(
     title="Video Chatbot API",
@@ -10,10 +12,13 @@ app = FastAPI(
 
 # ---------- Request Schemas ----------
 class VideoRequest(BaseModel):
-    file_path: str = Field(
+    file_paths: List[str] = Field(
         ...,
-        description="Absolute path to the video file on your system",
-        example="C:\\Users\\Downloads\\video.mp4"
+        description="List of absolute paths to video files on your system",
+        example=[
+            "C:\\Users\\Downloads\\video1.mp4",
+            "C:\\Users\\Downloads\\video2.mp4"
+        ]
     )
 
 
@@ -21,7 +26,7 @@ class QuestionRequest(BaseModel):
     question: str = Field(
         ...,
         description="Your natural language question about the video",
-        example="What is happening in the first 30 seconds of the video?"
+        example="What is happening in the video?"
     )
 
 
@@ -31,15 +36,28 @@ class QuestionRequest(BaseModel):
     summary="Analyze Video",
     description="Runs the description chain using the provided video path and generates a textual description."
 )
+
+@app.post("/analyze-video")
 def analyze_video(req: VideoRequest):
-    """
-    Takes a video path as input and returns a description of the video.
-    """
     try:
-        result = description_chain.invoke(req.file_path)
-        return {"description": result}
+        results = []
+        userid = str(uuid.uuid4())[:8]
+
+        try:
+            make_vector_store(userid)
+        except Exception as e:
+            print(f"❌ Vector store creation failed: {e}")
+            return {"error": str(e)}
+
+        # Loop through each provided file path
+        for file_path in req.file_paths:
+            result = description_chain.invoke(file_path)
+            results.append(result)
+
+        return {"descriptions": results}
     except Exception as e:
         return {"error": str(e)}
+
 
 
 @app.post(
